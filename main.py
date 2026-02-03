@@ -2,11 +2,10 @@
 # -*- coding: utf-8 -*-
 
 # Imports
-import os, shodan, time
+import os, shodan, time, math
 from rainbow import *
 from colorama import Fore
 from datetime import datetime
-
 
 def clear() -> None:
 	"""Funcion para realizar un clear en la terminal segun el sistema operativo"""
@@ -58,24 +57,12 @@ def banner() -> None:
 ██████ ▀███▀ ▀███▀ ██ ██ ▀████▀ ██                           
 """))
 
-def flag_emoji(country_code: str) -> str:
-    """Convierte un código de país ISO 3166-1 alpha-2 (ej. 'ES') en su emoji (🇪🇸)."""
-    if len(country_code) != 2:
-        return ""
-    
-    code = country_code.upper()
-
-    if not code.isalpha():
-        return ""
-
-    OFFSET = 127397
-    return chr(ord(code[0]) + OFFSET) + chr(ord(code[1]) + OFFSET)
-
 def format_output(mode: str, data: dict) -> list:
 	if mode == "ip":
 		output = []
 		vulns = {}
-		output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}IP Address: {Fore.YELLOW}{data.get('ip_str', 'N/A')} {Fore.LIGHTMAGENTA_EX}| {Fore.YELLOW}{data.get('city', 'N/A')} ({flag_emoji(data.get('country_code', '')) if os.name != 'nt' else ''}{data.get('country_name', 'N/A')}/{data.get('region_code', 'N/A')}){Fore.RESET}")
+		output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}IP Address: {Fore.YELLOW}{data.get('ip_str', 'N/A')} {Fore.LIGHTMAGENTA_EX}| {Fore.YELLOW}{data.get('city', 'N/A')} {data.get('country_name', 'N/A')}/{data.get('region_code', 'N/A')}){Fore.RESET}")
+		output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}Latitude: {Fore.YELLOW}{data.get('latitude', 'N/A')} {Fore.LIGHTMAGENTA_EX}| {Fore.CYAN}Longitude: {Fore.YELLOW}{data.get('longitude', 'N/A')}{Fore.RESET}")
 		output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}Organization: {Fore.YELLOW}{data.get('org', 'N/A')}{Fore.RESET}")
 		output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}ISP: {Fore.YELLOW}{data.get('isp', 'N/A')}{Fore.RESET}")
 		output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}Hostnames: {Fore.YELLOW}{', '.join(data.get('hostnames', [])) if data.get('hostnames') else 'N/A'} {Fore.LIGHTMAGENTA_EX}| {Fore.CYAN}Domains: {Fore.YELLOW}{', '.join(data.get('domains', [])) if data.get('domains') else 'N/A'}{Fore.RESET}")
@@ -110,9 +97,25 @@ def format_output(mode: str, data: dict) -> list:
 
 		return output
 
+	elif mode == "query":
+		output = []
+		try:
+			dt_object = datetime.strptime(data.get('timestamp', '').split('.')[0], "%Y-%m-%dT%H:%M:%S")
+			final_date = dt_object.strftime('%d-%m-%Y %H:%M:%S')
+		except (ValueError, AttributeError):
+			final_date = "Unknown"
+		
+		product = data.get('product') or data.get('os') or 'N/A'
+
+		output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}IP Address: {Fore.YELLOW}{data.get('ip_str', 'N/A')} {Fore.LIGHTMAGENTA_EX}| {Fore.YELLOW}{data.get('location', 'N/A').get('city', 'N/A')} ({data.get('location', 'N/A').get('country_name', 'N/A')}/{data.get('location', 'N/A').get('region_code', 'N/A')}){Fore.RESET}")
+		output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}Organization: {Fore.YELLOW}{data.get('org', 'N/A')}{Fore.RESET}")
+		output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}ISP: {Fore.YELLOW}{data.get('isp', 'N/A')}{Fore.RESET}")
+		output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}Port: {Fore.YELLOW}{data.get('port', 'N/A')}/{data.get('transport', 'tcp')} {Fore.LIGHTMAGENTA_EX}| {Fore.CYAN}Product: {Fore.YELLOW}{product}{Fore.RESET}")
+		output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}TimeStamp: {Fore.YELLOW}{final_date}{Fore.RESET}")
+		return output
+
 	return []
 	
-
 def search_ip(api: shodan.Shodan, ip: str) -> None:
 	try:
 		result = api.host(ip)
@@ -131,6 +134,65 @@ def search_ip(api: shodan.Shodan, ip: str) -> None:
 		menu(api)
 	except Exception as e:
 		print(f"\n{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}Error: {e}{Fore.RESET}\n")
+
+def query_search(api: shodan.Shodan, query: str) -> None:
+	page = 1
+	while True:
+		try:
+			clear(); banner()
+			results = api.search(query, page=page)
+			if not results or results.get('total', 0) == 0:
+				print(f"\n{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}No results found for query: {Fore.YELLOW}{query}{Fore.RESET}\n")
+				return
+			
+			total_pages = math.ceil(results.get('total', 0) / 100)
+			print(f"{Fore.WHITE}[{Fore.BLUE}*{Fore.WHITE}] {Fore.BLUE}Searching for: {Fore.YELLOW}{query} {Fore.WHITE}(Page {page} of {total_pages})...")
+
+			
+			print(f"\n{Fore.WHITE}[{Fore.GREEN}+{Fore.WHITE}] {Fore.GREEN}Total results for query '{rainbow(query)}{Fore.GREEN}': {Fore.YELLOW}{results.get('total', 0)}{Fore.RESET}\n")
+			
+			for match in results.get('matches', []):
+				print(f"{Fore.WHITE}[{Fore.LIGHTMAGENTA_EX}{'-'*40}{Fore.WHITE}]")
+				output = format_output("query", match)
+				for line in output:
+					print(line)
+				print(f"{Fore.WHITE}[{Fore.LIGHTMAGENTA_EX}{'-'*40}{Fore.WHITE}]\n")
+
+			print(f"{Fore.CYAN}Navigation: {Fore.WHITE}[{Fore.YELLOW}n{Fore.WHITE}] Next | [{Fore.YELLOW}p{Fore.WHITE}] Previous | [{Fore.YELLOW}q{Fore.WHITE}] Quit to menu | [{Fore.YELLOW}1-{total_pages}{Fore.WHITE}] Jump to page\n")
+			choice = input(f"{Fore.WHITE}[{Fore.BLUE}?{Fore.WHITE}] {rainbow('Select option:')} {Fore.RESET}").lower().strip()
+			if choice == 'q':
+				break
+
+			elif choice == 'n':
+				if page < total_pages:
+					page += 1
+				else:
+					print(f"\n{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}You are already on the last page.{Fore.RESET}\n")
+					time.sleep(1)
+			
+			elif choice == 'p':
+				if page > 1:
+					page -= 1
+				else:
+					print(f"\n{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}You are already on the first page.{Fore.RESET}\n")
+					time.sleep(1)
+			
+			elif choice.isdigit() and 1 <= int(choice) <= total_pages:
+				page = int(choice)
+
+			else:
+				print(f"\n{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}Invalid option selected.{Fore.RESET}\n")
+				time.sleep(1)
+
+		except shodan.APIError as e:
+			print(f"\n{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}API Error: {e}{Fore.RESET}\n")
+			input(f"{Fore.WHITE}[{Fore.BLUE}?{Fore.WHITE}] {rainbow('Press Enter to return to the menu...')}{Fore.RESET}")
+			menu(api)
+		except Exception as e:
+			print(f"\n{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}Error: {e}{Fore.RESET}\n")
+
+		except KeyboardInterrupt:
+			break
 
 def setup() -> str:
 	"""Configura la clave de API de Shodan para su uso en la aplicación."""
@@ -171,8 +233,6 @@ def setup() -> str:
 		else:
 			print(f"\n{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}Invalid API key.")
 	
-	
-
 def menu(api: shodan.Shodan) -> None:
 	clear(); banner()
 	print(f"{Fore.WHITE}[{Fore.BLUE}+{Fore.WHITE}]{rainbow('-'*31)}{Fore.WHITE}[{Fore.BLUE}+{Fore.WHITE}]")
@@ -185,7 +245,7 @@ def menu(api: shodan.Shodan) -> None:
 	print(f"{Fore.WHITE}[{Fore.BLUE}+{Fore.WHITE}]{rainbow('-'*31)}{Fore.WHITE}[{Fore.BLUE}+{Fore.WHITE}]\n")
 
 	choice = input(f"{Fore.WHITE}[{Fore.BLUE}?{Fore.WHITE}] {rainbow('Select an option:')} {Fore.RESET}").strip()
-
+	print()
 
 	if choice == "1":
 		ip = input(f"{Fore.WHITE}[{Fore.BLUE}?{Fore.WHITE}] {rainbow('Enter IP address:')} {Fore.RESET}").strip()
@@ -194,9 +254,24 @@ def menu(api: shodan.Shodan) -> None:
 		print()
 		input(f"{Fore.WHITE}[{Fore.BLUE}?{Fore.WHITE}] {rainbow('Press Enter to return to the menu...')}{Fore.RESET}")
 		menu(api)
-
-
-
+	elif choice == "2":
+		None
+	elif choice == "3":
+		query = input(f"{Fore.WHITE}[{Fore.BLUE}?{Fore.WHITE}] {rainbow('Enter search query:')} {Fore.RESET}").strip()
+		clear(); banner()
+		query_search(api, query)
+		print()
+		input(f"{Fore.WHITE}[{Fore.BLUE}?{Fore.WHITE}] {rainbow('Press Enter to return to the menu...')}{Fore.RESET}")
+		menu(api)
+	elif choice == "0":
+		print(f"{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}Exiting...{Fore.RESET}\n")
+		time.sleep(.7)
+		clear()
+		exit()
+	else:
+		print(f"{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}Invalid option selected.{Fore.RESET}\n")
+		time.sleep(1)
+		menu(api)
 
 if __name__ == "__main__":
 	try:
