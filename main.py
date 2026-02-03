@@ -5,6 +5,7 @@
 import os, shodan, time
 from rainbow import *
 from colorama import Fore
+from datetime import datetime
 
 
 def clear() -> None:
@@ -57,19 +58,77 @@ def banner() -> None:
 ██████ ▀███▀ ▀███▀ ██ ██ ▀████▀ ██                           
 """))
 
-def format_output(label: str, data: str) -> str:
-	return f"{Fore.WHITE}[{Fore.GREEN}+{Fore.WHITE}] {Fore.CYAN}{label}: {Fore.YELLOW}{data}{Fore.RESET}"
+def flag_emoji(country_code: str) -> str:
+    """Convierte un código de país ISO 3166-1 alpha-2 (ej. 'ES') en su emoji (🇪🇸)."""
+    if len(country_code) != 2:
+        return ""
+    
+    code = country_code.upper()
+
+    if not code.isalpha():
+        return ""
+
+    OFFSET = 127397
+    return chr(ord(code[0]) + OFFSET) + chr(ord(code[1]) + OFFSET)
+
+def format_output(mode: str, data: dict) -> list:
+	if mode == "ip":
+		output = []
+		vulns = {}
+		output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}IP Address: {Fore.YELLOW}{data.get('ip_str', 'N/A')} {Fore.LIGHTMAGENTA_EX}| {Fore.YELLOW}{data.get('city', 'N/A')} ({flag_emoji(data.get('country_code', '')) if os.name != 'nt' else ''}{data.get('country_name', 'N/A')}/{data.get('region_code', 'N/A')}){Fore.RESET}")
+		output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}Organization: {Fore.YELLOW}{data.get('org', 'N/A')}{Fore.RESET}")
+		output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}ISP: {Fore.YELLOW}{data.get('isp', 'N/A')}{Fore.RESET}")
+		output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}Hostnames: {Fore.YELLOW}{', '.join(data.get('hostnames', [])) if data.get('hostnames') else 'N/A'} {Fore.LIGHTMAGENTA_EX}| {Fore.CYAN}Domains: {Fore.YELLOW}{', '.join(data.get('domains', [])) if data.get('domains') else 'N/A'}{Fore.RESET}")
+		output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}Operating System: {Fore.YELLOW}{data.get('os', 'N/A')}{Fore.RESET}")
+		try:
+			dt_object = datetime.strptime(data.get('last_update', '').split('.')[0], "%Y-%m-%dT%H:%M:%S")
+			final_date = dt_object.strftime('%d-%m-%Y %H:%M:%S')
+		except (ValueError, AttributeError):
+			final_date = "Unknown"
+		output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}Last Update: {Fore.YELLOW}{final_date}{Fore.RESET}")
+
+		output.append(f"\n{Fore.WHITE}[{Fore.CYAN}{'='*40}{Fore.WHITE}]")
+		for p in data.get('data', []):
+			output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}Port: {Fore.YELLOW}{p.get('port', 'N/A')}/{p.get('transport', 'tcp')} {Fore.LIGHTMAGENTA_EX}| {Fore.CYAN}Product: {Fore.YELLOW}{p.get('product', 'N/A')}{Fore.RESET}")
+			if p.get('vulns'):
+				output[-1] += f" {Fore.LIGHTMAGENTA_EX}| {Fore.RED}Vulnerabilities: {Fore.YELLOW}{', '.join(p.get('vulns').keys())}{Fore.RESET}"
+			for cve, details in p.get('vulns', {}).items():
+				cvss = details.get('cvss', 'N/A')
+				if cvss != 'N/A' and isinstance(cvss, (int, float)):
+					if cvss >= 7.0: cvss_color = Fore.RED
+					elif 4.0 <= cvss < 7.0: cvss_color = Fore.YELLOW
+					else: cvss_color = Fore.GREEN
+					cvss_str = f"{cvss_color}{cvss}{Fore.RESET}"
+				vulns[cve] = {"cvss": cvss_str, "summary": Fore.YELLOW + details.get('summary', 'N/A')}
+		output.append(f"{Fore.WHITE}[{Fore.CYAN}{'='*40}{Fore.WHITE}]")
+
+		output.append(f"\n{Fore.WHITE}[{Fore.LIGHTMAGENTA_EX}{'='*40}{Fore.WHITE}]") if data.get('vulns') else None
+		for v in data.get('vulns', {}):
+			output.append(f"{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] ({vulns.get(v, {}).get('cvss', 'N/A')}) {Fore.RED}Vulnerability: {Fore.YELLOW}{v}{Fore.RESET} {Fore.LIGHTMAGENTA_EX} | {Fore.CYAN}Details: {Fore.YELLOW}{vulns.get(v, {}).get('summary', 'N/A')}{Fore.RESET}")
+			output.append("") if len(vulns) > 1 else None
+		output.append(f"{Fore.WHITE}[{Fore.LIGHTMAGENTA_EX}{'='*40}{Fore.WHITE}]") if data.get('vulns') else None
+
+		return output
+
+	return []
+	
 
 def search_ip(api: shodan.Shodan, ip: str) -> None:
 	try:
 		result = api.host(ip)
+		if not result:
+			print(f"\n{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}No results found for IP: {Fore.YELLOW}{ip}{Fore.RESET}\n")
+			return
 		print(f"\n{Fore.WHITE}[{Fore.GREEN}+{Fore.WHITE}] {Fore.GREEN}Results for IP: {Fore.YELLOW}{ip}{Fore.RESET}\n")
-		for key, value in result.items():
-			print(format_output(key, str(value)))
+		output = format_output("ip", result)
+		for line in output:
+			print(line)
 			
 		print()
 	except shodan.APIError as e:
 		print(f"\n{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}API Error: {e}{Fore.RESET}\n")
+		input(f"{Fore.WHITE}[{Fore.BLUE}?{Fore.WHITE}] {rainbow('Press Enter to return to the menu...')}{Fore.RESET}")
+		menu(api)
 	except Exception as e:
 		print(f"\n{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}Error: {e}{Fore.RESET}\n")
 
@@ -80,7 +139,7 @@ def setup() -> str:
 	txt = rainbow('Checking for API key')
 	for char in ["/", "-", "\\", "|", "/", "-", "\\", "|", "#"]:
 		print(f"\r{Fore.WHITE}[{Fore.BLUE}?{Fore.WHITE}] {txt} {Fore.YELLOW}{char}{Fore.RESET}", end="")
-		time.sleep(0.3)
+		time.sleep(0.2)
 	print()
 
 	key = read_env()
@@ -123,16 +182,18 @@ def menu(api: shodan.Shodan) -> None:
     {Fore.WHITE}[{Fore.BLUE}3{Fore.WHITE}] {rainbow('Search by query')} 🔎
     {Fore.WHITE}[{Fore.BLUE}0{Fore.WHITE}] {rainbow('Exit')} ❌
 	""")
-	print(f"{Fore.WHITE}[{Fore.BLUE}+{Fore.WHITE}]{rainbow('-'*31)}{Fore.WHITE}[{Fore.BLUE}+{Fore.WHITE}]")
-
-	print(api.info())
+	print(f"{Fore.WHITE}[{Fore.BLUE}+{Fore.WHITE}]{rainbow('-'*31)}{Fore.WHITE}[{Fore.BLUE}+{Fore.WHITE}]\n")
 
 	choice = input(f"{Fore.WHITE}[{Fore.BLUE}?{Fore.WHITE}] {rainbow('Select an option:')} {Fore.RESET}").strip()
 
 
 	if choice == "1":
 		ip = input(f"{Fore.WHITE}[{Fore.BLUE}?{Fore.WHITE}] {rainbow('Enter IP address:')} {Fore.RESET}").strip()
+		clear(); banner()
 		search_ip(api, ip)
+		print()
+		input(f"{Fore.WHITE}[{Fore.BLUE}?{Fore.WHITE}] {rainbow('Press Enter to return to the menu...')}{Fore.RESET}")
+		menu(api)
 
 
 
