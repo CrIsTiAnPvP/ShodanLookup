@@ -1,100 +1,107 @@
-# 👾 ShodanLookup 👾
+# ShodanLookUp
 
-**Una herramienta de línea de comandos para consultar la API de Shodan y explorar información de hosts de forma rápida y visual.**
+ShodanLookUp is a powerful Python-based tool for interacting with the Shodan API. It allows you to search for information about IP addresses and execute custom queries directly from your terminal. The tool features a user-friendly interactive mode with colorful output and a non-interactive CLI mode for scripting and automation.
 
-</div>
+![Banner](banner.png) <!-- Replace with an actual screenshot or banner image -->
 
-``` bash
-▄█████ ▄▄ ▄▄  ▄▄▄  ▄▄▄▄   ▄▄▄  ▄▄  ▄▄ 
-▀▀▀▄▄▄ ██▄██ ██▀██ ██▀██ ██▀██ ███▄██ 
-█████▀ ██ ██ ▀███▀ ████▀ ██▀██ ██ ▀██ 
-                                        By CrIsTiiAnPvP
-██      ▄▄▄   ▄▄▄  ▄▄ ▄▄ ██  ██ ▄▄▄▄  
-██     ██▀██ ██▀██ ██▄█▀ ██  ██ ██▄█▀ 
-██████ ▀███▀ ▀███▀ ██ ██ ▀████▀ ██                           
-```
+## ✨ Features
 
----
+- **Interactive & CLI Modes**: Use the intuitive interactive menu or the efficient command-line interface for your searches.
+- **IP Address Lookup**: Get detailed information about a specific IP address, including location, ISP, open ports, and known vulnerabilities.
+- **Custom Shodan Queries**: Perform complex searches using Shodan's query syntax and navigate through the results.
+- **API Key Management**: The tool securely prompts for your Shodan API key and saves it in a `.env` file for future use.
+- **Colored Output**: Results are presented in a clear, color-coded format for better readability.
+- **Vulnerability Information**: Displays CVEs associated with services, including their CVSS score and a summary.
 
-## 📖 Descripción
+## 🚀 Getting Started
 
-**ShodanLookup** es un script de Python que facilita la obtención de información detallada sobre direcciones IP utilizando la potente API de [Shodan](https://www.shodan.io/). La herramienta presenta los datos de una manera clara y organizada, utilizando colores para resaltar la información más relevante, como vulnerabilidades y servicios.
-
-## ✨ Características Principales
-
-- **Configuración Automática**: Detecta si tienes una clave de API de Shodan. Si no, te pedirá una y la guardará en un archivo `.env` para futuros usos.
-- **Consulta de IP**: Obtén información completa de un host, incluyendo:
-  - Geolocalización (país, ciudad) con bandera emoji.
-  - Organización, ISP y sistema operativo.
-  - Nombres de host y dominios asociados.
-  - Puertos abiertos y servicios en ejecución.
-- **Visualización de Vulnerabilidades**: Identifica y lista las vulnerabilidades (CVEs) asociadas a los servicios, mostrando su puntuación CVSS y un resumen del problema.
-- **Interfaz Colorida**: Utiliza `colorama` y un módulo `rainbow` para una experiencia de usuario más amigable y una fácil identificación de datos críticos.
-- **Menú Interactivo**: Navega por las diferentes funciones de la herramienta de forma sencilla.
-
-## 📋 Requisitos
+### Prerequisites
 
 - Python 3.x
-- Una clave de API de Shodan. Puedes obtenerla en [https://account.shodan.io/](https://account.shodan.io/).
+- A Shodan API Key. You can get one from [https://account.shodan.io/](https://account.shodan.io/).
 
-## ⚙️ Instalación
+### Installation
 
-1. Clona este repositorio o descarga los archivos:
+1. **Clone the repository:**
 
     ```bash
-    git clone https://github.com/CrIsTiiAnPvP/ShodanLookup.git
+    git clone https://github.com/CrIsTiAnPvP/ShodanLookup
     cd ShodanLookup
     ```
 
-2. Crea un entorno virtual (recomendado):
+2. **Install dependencies:**
+    It is recommended to use a virtual environment.
 
     ```bash
     python -m venv .venv
-    source .venv/bin/activate  # En Windows: .venv\Scripts\activate
+    source .venv/bin/activate  # On Windows use `.venv\Scripts\activate`
     ```
 
-3. Instala las dependencias:
-
-    Y luego instalarlo con:
+    Install the required Python packages from `requirements.txt`:
 
     ```bash
-    pip install colorama shodan
+    pip install shodan colorama
     ```
 
-## 🚀 Uso
+    *(You may want to create a `requirements.txt` file for easier installation)*
 
-1. Ejecuta el script:
+### Configuration
 
-    ```bash
-    python main.py
-    ```
-
-2. La primera vez que lo ejecutes, te pedirá tu clave de API de Shodan. Introdúcela y la herramienta la guardará en un archivo `.env` para no volver a pedirla.
-
-3. Selecciona una opción del menú:
-    - **`[1] Search by IP address`**: Introduce la IP que deseas investigar.
-
-### Ejemplo de Salida
+The first time you run the tool in interactive mode, it will prompt you to enter your Shodan API key.
 
 ```bash
-
-[+] Results for IP: 8.8.8.8
-
-[*] IP Address: 8.8.8.8 | Mountain View (🇺🇸 United States/CA)
-[*] Organization: Google LLC
-[*] ISP: Google LLC
-[*] Hostnames: dns.google | Domains: dns.google
-[*] Operating System: None
-[*] Last Update: 03-02-2026 07:00:01
-
-[========================================]
-[*] Port: 53/tcp | Product: N/A
-[*] Port: 53/udp | Product: N/A
-[*] Port: 443/tcp | Product: N/A
-[========================================]
-
+python main.py
 ```
 
-## ⚖️ Licencia
+The tool will validate the key and save it to a `.env` file in the project's root directory. This key will be used for all subsequent sessions.
 
-Este proyecto está bajo la Licencia MIT. Consulta el archivo `LICENSE` para más detalles.
+## usage
+
+You can run the tool in two modes: interactive or command-line (CLI).
+
+### Interactive Mode
+
+To start the interactive menu, simply run the script without any arguments:
+
+```bash
+python main.py
+```
+
+You will be presented with a menu to choose your action:
+
+- **Search by IP address**: Get details for a single IP.
+- **Search by Domain name**: (Feature to be implemented)
+- **Search by query**: Use any Shodan search filter and navigate the results.
+
+### Command-Line (CLI) Mode
+
+For quick searches or scripting, you can use the command-line arguments.
+
+**Arguments:**
+
+- `-m, --mode`: The mode of operation.
+  - `ip`: For an IP address search.
+  - `query`: For a Shodan query search.
+- `-t, --target`: The target for the search (either an IP address or a query string).
+
+**Examples:**
+
+- **Search for an IP address:**
+
+    ```bash
+    python main.py -m ip -t 8.8.8.8
+    ```
+
+- **Search using a query:**
+
+    ```bash
+    python main.py -m query -t "apache country:US"
+    ```
+
+## 📜 License
+
+This project is licensed under the terms of the LICENSE file.
+
+## ✍️ Author
+
+- **CrIsTiiAnPvP**

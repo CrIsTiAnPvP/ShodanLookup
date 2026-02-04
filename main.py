@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 # Imports
-import os, shodan, time, math
+import os, shodan, time, math, argparse
 from rainbow import *
 from colorama import Fore
 from datetime import datetime
@@ -61,7 +61,7 @@ def format_output(mode: str, data: dict) -> list:
 	if mode == "ip":
 		output = []
 		vulns = {}
-		output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}IP Address: {Fore.YELLOW}{data.get('ip_str', 'N/A')} {Fore.LIGHTMAGENTA_EX}| {Fore.YELLOW}{data.get('city', 'N/A')} {data.get('country_name', 'N/A')}/{data.get('region_code', 'N/A')}){Fore.RESET}")
+		output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}IP Address: {Fore.YELLOW}{data.get('ip_str', 'N/A')} {Fore.LIGHTMAGENTA_EX}| {Fore.YELLOW}{data.get('city', 'N/A')} ({data.get('country_name', 'N/A')}/{data.get('region_code', 'N/A')}){Fore.RESET}")
 		output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}Latitude: {Fore.YELLOW}{data.get('latitude', 'N/A')} {Fore.LIGHTMAGENTA_EX}| {Fore.CYAN}Longitude: {Fore.YELLOW}{data.get('longitude', 'N/A')}{Fore.RESET}")
 		output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}Organization: {Fore.YELLOW}{data.get('org', 'N/A')}{Fore.RESET}")
 		output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}ISP: {Fore.YELLOW}{data.get('isp', 'N/A')}{Fore.RESET}")
@@ -107,7 +107,7 @@ def format_output(mode: str, data: dict) -> list:
 		
 		product = data.get('product') or data.get('os') or 'N/A'
 
-		output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}IP Address: {Fore.YELLOW}{data.get('ip_str', 'N/A')} {Fore.LIGHTMAGENTA_EX}| {Fore.YELLOW}{data.get('location', 'N/A').get('city', 'N/A')} ({data.get('location', 'N/A').get('country_name', 'N/A')}/{data.get('location', 'N/A').get('region_code', 'N/A')}){Fore.RESET}")
+		output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}IP Address: {Fore.YELLOW}{data.get('ip_str', 'N/A')} {Fore.LIGHTMAGENTA_EX}| {Fore.YELLOW}{data.get('location', {}).get('city', 'N/A')} ({data.get('location', {}).get('country_name', 'N/A')}/{data.get('location', {}).get('region_code', 'N/A')}){Fore.RESET}")
 		output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}Organization: {Fore.YELLOW}{data.get('org', 'N/A')}{Fore.RESET}")
 		output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}ISP: {Fore.YELLOW}{data.get('isp', 'N/A')}{Fore.RESET}")
 		output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}Port: {Fore.YELLOW}{data.get('port', 'N/A')}/{data.get('transport', 'tcp')} {Fore.LIGHTMAGENTA_EX}| {Fore.CYAN}Product: {Fore.YELLOW}{product}{Fore.RESET}")
@@ -116,7 +116,7 @@ def format_output(mode: str, data: dict) -> list:
 
 	return []
 	
-def search_ip(api: shodan.Shodan, ip: str) -> None:
+def search_ip(api: shodan.Shodan, ip: str, mode: str = "interactive") -> None:
 	try:
 		result = api.host(ip)
 		if not result:
@@ -130,25 +130,80 @@ def search_ip(api: shodan.Shodan, ip: str) -> None:
 		print()
 	except shodan.APIError as e:
 		print(f"\n{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}API Error: {e}{Fore.RESET}\n")
-		input(f"{Fore.WHITE}[{Fore.BLUE}?{Fore.WHITE}] {rainbow('Press Enter to return to the menu...')}{Fore.RESET}")
-		menu(api)
+		if mode == "interactive":
+			input(f"{Fore.WHITE}[{Fore.BLUE}?{Fore.WHITE}] {rainbow('Press Enter to return to the menu...')}{Fore.RESET}")
+		else:
+			exit(1)
 	except Exception as e:
 		print(f"\n{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}Error: {e}{Fore.RESET}\n")
 
-def query_search(api: shodan.Shodan, query: str) -> None:
-	page = 1
-	while True:
+def query_search(api: shodan.Shodan, query: str, mode: str = "interactive") -> None:
+	if mode == "interactive":
+		page = 1
+		while True:
+			try:
+				clear(); banner()
+				results = api.search(query, page=page)
+				if not results or results.get('total', 0) == 0:
+					print(f"\n{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}No results found for query: {Fore.YELLOW}{query}{Fore.RESET}\n")
+					return
+				
+				total_pages = math.ceil(results.get('total', 0) / 100)
+				print(f"{Fore.WHITE}[{Fore.BLUE}*{Fore.WHITE}] {Fore.BLUE}Searching for: {Fore.YELLOW}{query} {Fore.WHITE}(Page {page} of {total_pages})...")
+
+				
+				print(f"\n{Fore.WHITE}[{Fore.GREEN}+{Fore.WHITE}] {Fore.GREEN}Total results for query '{rainbow(query)}{Fore.GREEN}': {Fore.YELLOW}{results.get('total', 0)}{Fore.RESET}\n")
+				
+				for match in results.get('matches', []):
+					print(f"{Fore.WHITE}[{Fore.LIGHTMAGENTA_EX}{'-'*40}{Fore.WHITE}]")
+					output = format_output("query", match)
+					for line in output:
+						print(line)
+					print(f"{Fore.WHITE}[{Fore.LIGHTMAGENTA_EX}{'-'*40}{Fore.WHITE}]\n")
+
+				print(f"{Fore.CYAN}Navigation: {Fore.WHITE}[{Fore.YELLOW}n{Fore.WHITE}] Next | [{Fore.YELLOW}p{Fore.WHITE}] Previous | [{Fore.YELLOW}q{Fore.WHITE}] Quit to menu | [{Fore.YELLOW}1-{total_pages}{Fore.WHITE}] Jump to page\n")
+				choice = input(f"{Fore.WHITE}[{Fore.BLUE}?{Fore.WHITE}] {rainbow('Select option:')} {Fore.RESET}").lower().strip()
+				if choice == 'q':
+					break
+
+				elif choice == 'n':
+					if page < total_pages:
+						page += 1
+					else:
+						print(f"\n{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}You are already on the last page.{Fore.RESET}\n")
+						time.sleep(1)
+				
+				elif choice == 'p':
+					if page > 1:
+						page -= 1
+					else:
+						print(f"\n{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}You are already on the first page.{Fore.RESET}\n")
+						time.sleep(1)
+				
+				elif choice.isdigit() and 1 <= int(choice) <= total_pages:
+					page = int(choice)
+
+				else:
+					print(f"\n{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}Invalid option selected.{Fore.RESET}\n")
+					time.sleep(1)
+
+			except shodan.APIError as e:
+				print(f"\n{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}API Error: {e}{Fore.RESET}\n")
+				input(f"{Fore.WHITE}[{Fore.BLUE}?{Fore.WHITE}] {rainbow('Press Enter to return to the menu...')}{Fore.RESET}")
+			except Exception as e:
+				print(f"\n{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}Error: {e}{Fore.RESET}\n")
+
+			except KeyboardInterrupt:
+				break
+	else:
 		try:
-			clear(); banner()
-			results = api.search(query, page=page)
+			results = api.search(query)
 			if not results or results.get('total', 0) == 0:
 				print(f"\n{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}No results found for query: {Fore.YELLOW}{query}{Fore.RESET}\n")
 				return
 			
-			total_pages = math.ceil(results.get('total', 0) / 100)
-			print(f"{Fore.WHITE}[{Fore.BLUE}*{Fore.WHITE}] {Fore.BLUE}Searching for: {Fore.YELLOW}{query} {Fore.WHITE}(Page {page} of {total_pages})...")
+			print(f"{Fore.WHITE}[{Fore.BLUE}*{Fore.WHITE}] {Fore.BLUE}Searching for: {Fore.YELLOW}{query}{Fore.RESET}")
 
-			
 			print(f"\n{Fore.WHITE}[{Fore.GREEN}+{Fore.WHITE}] {Fore.GREEN}Total results for query '{rainbow(query)}{Fore.GREEN}': {Fore.YELLOW}{results.get('total', 0)}{Fore.RESET}\n")
 			
 			for match in results.get('matches', []):
@@ -158,41 +213,10 @@ def query_search(api: shodan.Shodan, query: str) -> None:
 					print(line)
 				print(f"{Fore.WHITE}[{Fore.LIGHTMAGENTA_EX}{'-'*40}{Fore.WHITE}]\n")
 
-			print(f"{Fore.CYAN}Navigation: {Fore.WHITE}[{Fore.YELLOW}n{Fore.WHITE}] Next | [{Fore.YELLOW}p{Fore.WHITE}] Previous | [{Fore.YELLOW}q{Fore.WHITE}] Quit to menu | [{Fore.YELLOW}1-{total_pages}{Fore.WHITE}] Jump to page\n")
-			choice = input(f"{Fore.WHITE}[{Fore.BLUE}?{Fore.WHITE}] {rainbow('Select option:')} {Fore.RESET}").lower().strip()
-			if choice == 'q':
-				break
-
-			elif choice == 'n':
-				if page < total_pages:
-					page += 1
-				else:
-					print(f"\n{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}You are already on the last page.{Fore.RESET}\n")
-					time.sleep(1)
-			
-			elif choice == 'p':
-				if page > 1:
-					page -= 1
-				else:
-					print(f"\n{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}You are already on the first page.{Fore.RESET}\n")
-					time.sleep(1)
-			
-			elif choice.isdigit() and 1 <= int(choice) <= total_pages:
-				page = int(choice)
-
-			else:
-				print(f"\n{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}Invalid option selected.{Fore.RESET}\n")
-				time.sleep(1)
-
 		except shodan.APIError as e:
 			print(f"\n{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}API Error: {e}{Fore.RESET}\n")
-			input(f"{Fore.WHITE}[{Fore.BLUE}?{Fore.WHITE}] {rainbow('Press Enter to return to the menu...')}{Fore.RESET}")
-			menu(api)
 		except Exception as e:
 			print(f"\n{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}Error: {e}{Fore.RESET}\n")
-
-		except KeyboardInterrupt:
-			break
 
 def setup() -> str:
 	"""Configura la clave de API de Shodan para su uso en la aplicación."""
@@ -234,47 +258,63 @@ def setup() -> str:
 			print(f"\n{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}Invalid API key.")
 	
 def menu(api: shodan.Shodan) -> None:
-	clear(); banner()
-	print(f"{Fore.WHITE}[{Fore.BLUE}+{Fore.WHITE}]{rainbow('-'*31)}{Fore.WHITE}[{Fore.BLUE}+{Fore.WHITE}]")
-	print(f"""
+	while True:
+		clear(); banner()
+		print(f"{Fore.WHITE}[{Fore.BLUE}+{Fore.WHITE}]{rainbow('-'*31)}{Fore.WHITE}[{Fore.BLUE}+{Fore.WHITE}]")
+		print(f"""
     {Fore.WHITE}[{Fore.BLUE}1{Fore.WHITE}] {rainbow('Search by IP address')} 🌐
     {Fore.WHITE}[{Fore.BLUE}2{Fore.WHITE}] {rainbow('Search by Domain name')} 🏷️
     {Fore.WHITE}[{Fore.BLUE}3{Fore.WHITE}] {rainbow('Search by query')} 🔎
     {Fore.WHITE}[{Fore.BLUE}0{Fore.WHITE}] {rainbow('Exit')} ❌
-	""")
-	print(f"{Fore.WHITE}[{Fore.BLUE}+{Fore.WHITE}]{rainbow('-'*31)}{Fore.WHITE}[{Fore.BLUE}+{Fore.WHITE}]\n")
+		""")
+		print(f"{Fore.WHITE}[{Fore.BLUE}+{Fore.WHITE}]{rainbow('-'*31)}{Fore.WHITE}[{Fore.BLUE}+{Fore.WHITE}]\n")
 
-	choice = input(f"{Fore.WHITE}[{Fore.BLUE}?{Fore.WHITE}] {rainbow('Select an option:')} {Fore.RESET}").strip()
-	print()
+		choice = input(f"{Fore.WHITE}[{Fore.BLUE}?{Fore.WHITE}] {rainbow('Select an option:')} {Fore.RESET}").strip()
+		print()
 
-	if choice == "1":
-		ip = input(f"{Fore.WHITE}[{Fore.BLUE}?{Fore.WHITE}] {rainbow('Enter IP address:')} {Fore.RESET}").strip()
-		clear(); banner()
-		search_ip(api, ip)
-		print()
-		input(f"{Fore.WHITE}[{Fore.BLUE}?{Fore.WHITE}] {rainbow('Press Enter to return to the menu...')}{Fore.RESET}")
-		menu(api)
-	elif choice == "2":
-		None
-	elif choice == "3":
-		query = input(f"{Fore.WHITE}[{Fore.BLUE}?{Fore.WHITE}] {rainbow('Enter search query:')} {Fore.RESET}").strip()
-		clear(); banner()
-		query_search(api, query)
-		print()
-		input(f"{Fore.WHITE}[{Fore.BLUE}?{Fore.WHITE}] {rainbow('Press Enter to return to the menu...')}{Fore.RESET}")
-		menu(api)
-	elif choice == "0":
-		print(f"{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}Exiting...{Fore.RESET}\n")
-		time.sleep(.7)
-		clear()
-		exit()
-	else:
-		print(f"{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}Invalid option selected.{Fore.RESET}\n")
-		time.sleep(1)
-		menu(api)
+		if choice == "1":
+			ip = input(f"{Fore.WHITE}[{Fore.BLUE}?{Fore.WHITE}] {rainbow('Enter IP address:')} {Fore.RESET}").strip()
+			clear(); banner()
+			search_ip(api, ip)
+			print()
+			input(f"{Fore.WHITE}[{Fore.BLUE}?{Fore.WHITE}] {rainbow('Press Enter to return to the menu...')}{Fore.RESET}")
+		elif choice == "2":
+			None
+		elif choice == "3":
+			query = input(f"{Fore.WHITE}[{Fore.BLUE}?{Fore.WHITE}] {rainbow('Enter search query:')} {Fore.RESET}").strip()
+			clear(); banner()
+			query_search(api, query)
+			print()
+			input(f"{Fore.WHITE}[{Fore.BLUE}?{Fore.WHITE}] {rainbow('Press Enter to return to the menu...')}{Fore.RESET}")
+		elif choice == "0":
+			print(f"{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}Exiting...{Fore.RESET}\n")
+			time.sleep(.7)
+			clear()
+			exit()
+		else:
+			print(f"{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}Invalid option selected.{Fore.RESET}\n")
+			time.sleep(1)
 
 if __name__ == "__main__":
 	try:
+		parser = argparse.ArgumentParser(description="ShodanLookUp Tool")
+		parser.add_argument('-m', '--mode', choices=['ip', 'query'], help='Mode of operation: ip for IP search, query for query search', type=str)
+		parser.add_argument('-t', '--target', help='Target IP address or query string based on the selected mode', type=str)
+		
+		args = parser.parse_args()
+
+		if args.mode and args.target:
+			api_key = read_env()
+			if not api_key or not check_key(api_key):
+				print(f"{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}Valid API key not found. Please run the script without arguments to set up the API key.{Fore.RESET}\n")
+				exit()
+			api = shodan.Shodan(api_key)
+			if args.mode == 'ip':
+				search_ip(api, args.target, mode="cli")
+			elif args.mode == 'query':
+				query_search(api, args.target, mode="cli")
+			exit()
+
 		api_key = setup()
 		menu(shodan.Shodan(api_key))
 	except KeyboardInterrupt:
