@@ -57,16 +57,41 @@ def banner() -> None:
 ██████ ▀███▀ ▀███▀ ██ ██ ▀████▀ ██                           
 """))
 
-def format_output(mode: str, data: dict) -> list:
+def format_output(mode: str, data: dict, comes_from: str = "interactive") -> list:
 	if mode == "ip":
 		output = []
 		vulns = {}
+		techs = {}
+		width_title = 50
+		ORANGE = "\033[38;2;255;153;0m"
+
+		# Tags
+		if data.get('tags', []):
+			output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}Tags: {Fore.YELLOW}{f' {Fore.LIGHTMAGENTA_EX}|{Fore.YELLOW} '.join(data.get('tags', []))}{Fore.RESET}")
+		
+		# Basic Info
 		output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}IP Address: {Fore.YELLOW}{data.get('ip_str', 'N/A')} {Fore.LIGHTMAGENTA_EX}| {Fore.YELLOW}{data.get('city', 'N/A')} ({data.get('country_name', 'N/A')}/{data.get('region_code', 'N/A')}){Fore.RESET}")
 		output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}Latitude: {Fore.YELLOW}{data.get('latitude', 'N/A')} {Fore.LIGHTMAGENTA_EX}| {Fore.CYAN}Longitude: {Fore.YELLOW}{data.get('longitude', 'N/A')}{Fore.RESET}")
 		output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}Organization: {Fore.YELLOW}{data.get('org', 'N/A')}{Fore.RESET}")
 		output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}ISP: {Fore.YELLOW}{data.get('isp', 'N/A')}{Fore.RESET}")
 		output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}Hostnames: {Fore.YELLOW}{', '.join(data.get('hostnames', [])) if data.get('hostnames') else 'N/A'} {Fore.LIGHTMAGENTA_EX}| {Fore.CYAN}Domains: {Fore.YELLOW}{', '.join(data.get('domains', [])) if data.get('domains') else 'N/A'}{Fore.RESET}")
+		
+		# Cloud Computing
+		for service in data.get('data', []):
+			cloud = service.get('cloud', {})
+			if cloud:
+				provider, region, service = cloud.get('provider', 'N/A'), cloud.get('region'), cloud.get('service')
+				cloud_str = f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}Cloud Info: {Fore.YELLOW}{provider}"
+				if region:
+					cloud_str += f" {Fore.LIGHTMAGENTA_EX}| {Fore.CYAN}Region: {Fore.YELLOW}{region}"
+				if service:
+					cloud_str += f" {Fore.LIGHTMAGENTA_EX}| {Fore.CYAN}Service: {Fore.YELLOW}{service}"
+				output.append(cloud_str + Fore.RESET)
+				break
+
 		output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}Operating System: {Fore.YELLOW}{data.get('os', 'N/A')}{Fore.RESET}")
+		
+		# Last Update Formatting
 		try:
 			dt_object = datetime.strptime(data.get('last_update', '').split('.')[0], "%Y-%m-%dT%H:%M:%S")
 			final_date = dt_object.strftime('%d-%m-%Y %H:%M:%S')
@@ -74,26 +99,116 @@ def format_output(mode: str, data: dict) -> list:
 			final_date = "Unknown"
 		output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}Last Update: {Fore.YELLOW}{final_date}{Fore.RESET}")
 
-		output.append(f"\n{Fore.WHITE}[{Fore.CYAN}{'='*40}{Fore.WHITE}]")
+		# Technologies
+		for p in data.get('data', []):
+			components = p.get('http', {}).get('components', {})
+			if components:
+				for name, details in components.items():
+					v = details.get('versions', [])
+					v_str = f" v{v[0]}" if v else ""
+					full_name = f"{name}{v_str}"
+					for cat in details.get('categories', ['Other']):
+						if cat not in techs:
+							techs[cat] = set()
+						techs[cat].add(full_name)
+		if techs:
+			title = "Technologies"
+			fill = int((width_title - len(title) - 2) / 2)
+			bar = '=' * fill
+			output.append(f"\n{Fore.WHITE}[{rainbow(bar)} {Fore.WHITE}{title} {rainbow(bar)}{Fore.WHITE}]")
+			output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.LIGHTMAGENTA_EX}Detected Technologies (Global Summary):{Fore.RESET}")
+			tech_items = list(techs.items())
+			total_items = len(tech_items)
+			for i, (cat, tech_set) in enumerate(techs.items()):
+				symbol = "└─" if i == total_items - 1 else "├─"
+				formatted_list = [f"{Fore.YELLOW}{t}{Fore.RESET}" for t in sorted(tech_set)]
+				tech_string = f"{Fore.LIGHTBLACK_EX}, ".join(formatted_list)
+				output.append(f"    {Fore.LIGHTMAGENTA_EX}│  {Fore.CYAN}{symbol} {cat}: {tech_string}")
+			output.append(f"{Fore.WHITE}[{rainbow('='*width_title)}{Fore.WHITE}]")
+
+		# Services & Ports
+		title = "Services & Ports"
+		fill = int((width_title - len(title) - 2) / 2)
+		bar = '=' * fill
+		output.append(f"\n{Fore.WHITE}[{Fore.BLUE}{bar} {Fore.WHITE}{title} {Fore.BLUE}{bar}{Fore.WHITE}]")
 		for p in data.get('data', []):
 			output.append(f"{Fore.WHITE}[{Fore.CYAN}*{Fore.WHITE}] {Fore.CYAN}Port: {Fore.YELLOW}{p.get('port', 'N/A')}/{p.get('transport', 'tcp')} {Fore.LIGHTMAGENTA_EX}| {Fore.CYAN}Product: {Fore.YELLOW}{p.get('product', 'N/A')}{Fore.RESET}")
 			if p.get('vulns'):
-				output[-1] += f" {Fore.LIGHTMAGENTA_EX}| {Fore.RED}Vulnerabilities: {Fore.YELLOW}{', '.join(p.get('vulns').keys())}{Fore.RESET}"
+				output[-1] += f" {Fore.LIGHTMAGENTA_EX}| {Fore.RED}Vulnerabilities: {Fore.YELLOW}{', '.join(p.get('vulns').keys())}{Fore.RESET}"	
 			for cve, details in p.get('vulns', {}).items():
-				cvss = details.get('cvss', 'N/A')
-				if cvss != 'N/A' and isinstance(cvss, (int, float)):
-					if cvss >= 7.0: cvss_color = Fore.RED
-					elif 4.0 <= cvss < 7.0: cvss_color = Fore.YELLOW
-					else: cvss_color = Fore.GREEN
-					cvss_str = f"{cvss_color}{cvss}{Fore.RESET}"
-				vulns[cve] = {"cvss": cvss_str, "summary": Fore.YELLOW + details.get('summary', 'N/A')}
-		output.append(f"{Fore.WHITE}[{Fore.CYAN}{'='*40}{Fore.WHITE}]")
+				try:
+					cvss = float(details.get('cvss', 0.0))
+				except (ValueError, TypeError):
+					cvss = 0.0
+				vulns[cve] = {
+                    "cvss": cvss, 
+                    "summary": details.get('summary', 'N/A')
+                }
+				
+		output.append(f"{Fore.WHITE}[{Fore.BLUE}{'='*width_title}{Fore.WHITE}]")
 
-		output.append(f"\n{Fore.WHITE}[{Fore.LIGHTMAGENTA_EX}{'='*40}{Fore.WHITE}]") if data.get('vulns') else None
-		for v in data.get('vulns', {}):
-			output.append(f"{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] ({vulns.get(v, {}).get('cvss', 'N/A')}) {Fore.RED}Vulnerability: {Fore.YELLOW}{v}{Fore.RESET} {Fore.LIGHTMAGENTA_EX} | {Fore.CYAN}Details: {Fore.YELLOW}{vulns.get(v, {}).get('summary', 'N/A')}{Fore.RESET}")
-			output.append("") if len(vulns) > 1 else None
-		output.append(f"{Fore.WHITE}[{Fore.LIGHTMAGENTA_EX}{'='*40}{Fore.WHITE}]") if data.get('vulns') else None
+		# Vulnerabilities
+		if vulns:
+			sorted_vulns = sorted(vulns.items(), key=lambda x: x[1]['cvss'], reverse=True)
+			show_details = True
+			if len(vulns) >5:
+				for line in output:
+					print(line)
+				output = []
+				if comes_from == "interactive":
+					print(f"\n{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}Found {Fore.YELLOW}{len(vulns)}{Fore.RED} vulnerabilities.\n")
+					choice = input(f"{Fore.WHITE}[{Fore.BLUE}?{Fore.WHITE}] {rainbow('Show descriptions for each vulnerability? (y/N):')} {Fore.RESET}").lower().strip()
+					if choice != 'y':
+						show_details = False
+
+			title = "Vulnerabilities"
+			fill = int((width_title - len(title) - 2) / 2)
+			bar = '=' * fill
+			output.append(f"\n{Fore.WHITE}[{Fore.LIGHTMAGENTA_EX}{bar} {Fore.WHITE}{title} {Fore.LIGHTMAGENTA_EX}{bar}{Fore.WHITE}]")
+			
+			if not show_details:
+				categories = {
+					"Critical": [], "High": [], "Medium": [], "Low": [], "None": []
+				}
+				for cve, data in sorted_vulns:
+					cvss = data['cvss']
+					if cvss >= 9.0:
+						cat = "Critical"; color = Fore.RED 
+					elif cvss >= 7.0:
+						cat = "High"; color = ORANGE
+					elif cvss >= 4.0:
+						cat = "Medium"; color = Fore.YELLOW
+					elif cvss > 0.0:
+						cat = "Low"; color = Fore.GREEN
+					else:
+						cat = "None"; color = Fore.WHITE
+					categories[cat].append(f"{color}{cve} {Fore.LIGHTBLACK_EX}(CVSS: {cvss}){Fore.RESET}")
+				
+				for cat, items in categories.items():
+					if items:
+						count = len(items)
+						if cat == "Critical": cat_color = Fore.RED
+						elif cat == "High": cat_color = ORANGE
+						elif cat == "Medium": cat_color = Fore.YELLOW
+						elif cat == "Low": cat_color = Fore.GREEN
+						else: cat_color = Fore.WHITE
+						output.append(f"{Fore.WHITE}({Fore.CYAN}{count}{Fore.WHITE}) {cat_color}{cat}:{Fore.RESET}")
+
+						for i, item_str in enumerate(items):
+							symbol = "└─" if i == len(items) - 1 else "├─"
+							output.append(f"    {Fore.LIGHTMAGENTA_EX}{symbol} {item_str}")
+			else:
+				for cve, data in sorted_vulns:
+					score = data['cvss']
+					if score >= 9.0: cvss_color = Fore.RED
+					elif score >= 7.0: cvss_color = ORANGE
+					elif score >= 4.0: cvss_color = Fore.YELLOW
+					elif score > 0.0: cvss_color = Fore.GREEN
+					else: cvss_color = Fore.WHITE
+					output.append(f"{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] ({cvss_color}{score}{Fore.WHITE}) {Fore.RED}Vulnerability: {Fore.YELLOW}{cve}{Fore.RESET} {Fore.LIGHTMAGENTA_EX}| {Fore.CYAN}Details: {Fore.WHITE}{data['summary']}{Fore.RESET}")
+					if len(vulns) > 1: output.append("")
+
+			output.append(f"{Fore.WHITE}[{Fore.LIGHTMAGENTA_EX}{'='*width_title}{Fore.WHITE}]")
 
 		return output
 
@@ -123,7 +238,7 @@ def search_ip(api: shodan.Shodan, ip: str, mode: str = "interactive") -> None:
 			print(f"\n{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}No results found for IP: {Fore.YELLOW}{ip}{Fore.RESET}\n")
 			return
 		print(f"\n{Fore.WHITE}[{Fore.GREEN}+{Fore.WHITE}] {Fore.GREEN}Results for IP: {Fore.YELLOW}{ip}{Fore.RESET}\n")
-		output = format_output("ip", result)
+		output = format_output("ip", result, mode)
 		for line in output:
 			print(line)
 			
@@ -188,8 +303,17 @@ def query_search(api: shodan.Shodan, query: str, mode: str = "interactive") -> N
 					time.sleep(1)
 
 			except shodan.APIError as e:
+				error = str(e).lower()
+
+				if "search cursor timed out" in error:
+					print(f"\n{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}Search cursor timed out. Returning to the first page.{Fore.RESET}\n")
+					page = 1
+					time.sleep(1)
+					continue
+
 				print(f"\n{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}API Error: {e}{Fore.RESET}\n")
-				input(f"{Fore.WHITE}[{Fore.BLUE}?{Fore.WHITE}] {rainbow('Press Enter to return to the menu...')}{Fore.RESET}")
+				return
+			
 			except Exception as e:
 				print(f"\n{Fore.WHITE}[{Fore.RED}!{Fore.WHITE}] {Fore.RED}Error: {e}{Fore.RESET}\n")
 
@@ -263,8 +387,7 @@ def menu(api: shodan.Shodan) -> None:
 		print(f"{Fore.WHITE}[{Fore.BLUE}+{Fore.WHITE}]{rainbow('-'*31)}{Fore.WHITE}[{Fore.BLUE}+{Fore.WHITE}]")
 		print(f"""
     {Fore.WHITE}[{Fore.BLUE}1{Fore.WHITE}] {rainbow('Search by IP address')} 🌐
-    {Fore.WHITE}[{Fore.BLUE}2{Fore.WHITE}] {rainbow('Search by Domain name')} 🏷️
-    {Fore.WHITE}[{Fore.BLUE}3{Fore.WHITE}] {rainbow('Search by query')} 🔎
+    {Fore.WHITE}[{Fore.BLUE}2{Fore.WHITE}] {rainbow('Search by query')} 🔎
     {Fore.WHITE}[{Fore.BLUE}0{Fore.WHITE}] {rainbow('Exit')} ❌
 		""")
 		print(f"{Fore.WHITE}[{Fore.BLUE}+{Fore.WHITE}]{rainbow('-'*31)}{Fore.WHITE}[{Fore.BLUE}+{Fore.WHITE}]\n")
@@ -279,8 +402,6 @@ def menu(api: shodan.Shodan) -> None:
 			print()
 			input(f"{Fore.WHITE}[{Fore.BLUE}?{Fore.WHITE}] {rainbow('Press Enter to return to the menu...')}{Fore.RESET}")
 		elif choice == "2":
-			None
-		elif choice == "3":
 			query = input(f"{Fore.WHITE}[{Fore.BLUE}?{Fore.WHITE}] {rainbow('Enter search query:')} {Fore.RESET}").strip()
 			clear(); banner()
 			query_search(api, query)
